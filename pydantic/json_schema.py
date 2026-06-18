@@ -1387,14 +1387,16 @@ class GenerateJsonSchema:
                 alias_is_present_on_all_choices = True
                 for choice in one_of_choices:
                     try:
-                        choice = self.resolve_ref_schema(choice)
+                        resolved_choice = self.resolve_ref_schema(choice)
                     except RuntimeError as exc:
+                        if '$ref' in choice:
+                            continue
                         # TODO: fixme - this is a workaround for the fact that we can't always resolve refs
                         # for tagged union choices at this point in the schema gen process, we might need to do
                         # another pass at the end like we do for core schemas
                         self.emit_warning('skipped-discriminator', str(exc))
-                        choice = {}
-                    properties = choice.get('properties', {})
+                        resolved_choice = {}
+                    properties = resolved_choice.get('properties', {})
                     if not isinstance(properties, dict) or alias not in properties:
                         alias_is_present_on_all_choices = False
                         break

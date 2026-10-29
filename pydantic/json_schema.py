@@ -1542,20 +1542,21 @@ class GenerateJsonSchema:
                 if not isinstance(alias, str):
                     continue  # this means that the "alias" does not represent a field
                 alias_is_present_on_all_choices = True
+                alias_was_checked = False
                 for choice in one_of_choices:
                     try:
                         choice = self.resolve_ref_schema(choice)
-                    except RuntimeError as exc:
-                        # TODO: fixme - this is a workaround for the fact that we can't always resolve refs
-                        # for tagged union choices at this point in the schema gen process, we might need to do
-                        # another pass at the end like we do for core schemas
-                        self.emit_warning('skipped-discriminator', str(exc))
-                        choice = {}
+                    except RuntimeError:
+                        # The choice references a definition that is still being generated (e.g. a recursive
+                        # model). As discriminator aliases are required to be the same on all choices, checking
+                        # the resolvable ones is enough.
+                        continue
                     properties = choice.get('properties', {})
                     if not isinstance(properties, dict) or alias not in properties:
                         alias_is_present_on_all_choices = False
                         break
-                if alias_is_present_on_all_choices:
+                    alias_was_checked = True
+                if alias_is_present_on_all_choices and alias_was_checked:
                     openapi_discriminator = alias
                     break
         return openapi_discriminator

@@ -4813,6 +4813,89 @@ def test_alias_same():
     }
 
 
+def test_alias_same_recursive() -> None:
+    class Cat(BaseModel):
+        pet_type: Literal['cat'] = Field(alias='typeOfPet')
+        kittens: list['Pet']
+
+    class Dog(BaseModel):
+        pet_type: Literal['dog'] = Field(alias='typeOfPet')
+
+    Pet = Annotated[Cat | Dog, Field(discriminator='pet_type')]
+
+    Cat.model_rebuild()
+
+    class Model(BaseModel):
+        pet: Pet
+
+    # insert_assert(Model.model_json_schema())
+    assert Model.model_json_schema() == {
+        '$defs': {
+            'Cat': {
+                'properties': {
+                    'kittens': {
+                        'items': {
+                            'discriminator': {
+                                'mapping': {'cat': '#/$defs/Cat', 'dog': '#/$defs/Dog'},
+                                'propertyName': 'typeOfPet',
+                            },
+                            'oneOf': [{'$ref': '#/$defs/Cat'}, {'$ref': '#/$defs/Dog'}],
+                        },
+                        'title': 'Kittens',
+                        'type': 'array',
+                    },
+                    'typeOfPet': {'const': 'cat', 'title': 'Typeofpet', 'type': 'string'},
+                },
+                'required': ['typeOfPet', 'kittens'],
+                'title': 'Cat',
+                'type': 'object',
+            },
+            'Dog': {
+                'properties': {'typeOfPet': {'const': 'dog', 'title': 'Typeofpet', 'type': 'string'}},
+                'required': ['typeOfPet'],
+                'title': 'Dog',
+                'type': 'object',
+            },
+        },
+        'properties': {
+            'pet': {
+                'discriminator': {
+                    'mapping': {'cat': '#/$defs/Cat', 'dog': '#/$defs/Dog'},
+                    'propertyName': 'typeOfPet',
+                },
+                'oneOf': [{'$ref': '#/$defs/Cat'}, {'$ref': '#/$defs/Dog'}],
+                'title': 'Pet',
+            }
+        },
+        'required': ['pet'],
+        'title': 'Model',
+        'type': 'object',
+    }
+
+
+def test_alias_same_all_choices_recursive() -> None:
+    """The OpenAPI discriminator must not be set without being checked against at least one choice."""
+
+    class Cat(BaseModel):
+        pet_type: Literal['cat'] = Field(alias='typeOfPet')
+        kittens: list['Pet']
+
+    class Dog(BaseModel):
+        pet_type: Literal['dog'] = Field(alias='typeOfPet')
+        puppies: list['Pet']
+
+    Pet = Annotated[Cat | Dog, Field(discriminator='pet_type')]
+
+    Cat.model_rebuild()
+    Dog.model_rebuild()
+
+    defs = Cat.model_json_schema()['$defs']
+    for model_schema in defs.values():
+        for prop in model_schema['properties'].values():
+            if 'discriminator' in prop.get('items', {}):
+                assert prop['items']['discriminator']['propertyName'] == 'typeOfPet'
+
+
 def test_nested_python_dataclasses():
     """
     Test schema generation for nested python dataclasses
